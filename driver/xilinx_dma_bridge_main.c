@@ -24,6 +24,9 @@
 #include <linux/slab.h>             // Memory allocation functions and definitions
 #include <linux/stat.h>             // Permission constants, for module parameters
 
+// Local dependencies
+#include "axidma.h"                 // Internal definitions
+
 /*--------------------------------------------------------------------------------------------------------------------
  * Module Parameters
  *--------------------------------------------------------------------------------------------------------------------*/
@@ -57,16 +60,43 @@ module_param(MINOR_NUMBER, int, S_IRUGO);
  **/
 static int xilinx_dma_bridge_probe(struct platform_device *pdev)
 {
-    /* TODO:
-     *  1. Get a pointer to the driver private device (global variable)
-     *  2. Set the platform device field.
-     *  3. Set the character device name
-     *  4. Set the number of devices (?)
-     *  5. Call the init function for the character device
-     *  6. Call the init function for the DMA subsystem.
-     **/
+    int rc;
+    struct axidma_device *axidma_dev;
 
+    // Allocate a AXI DMA device structure to hold metadata about the DMA
+    axidma_dev = kmalloc(sizeof(*axidma_dev), GFP_KERNEL);
+    if (axidma_dev == NULL) {
+        axidma_err("Unable to allocate the AXI DMA device structure.\n");
+        return -ENOMEM;
+    }
+    axidma_dev->pdev = pdev;
+
+    // Initialize the DMA interface
+    rc = axidma_dma_init(pdev, axidma_dev);
+    if (rc < 0) {
+        goto free_axidma_dev;
+    }
+
+    // Assign the character device name, minor number, and number of devices
+    axidma_dev->chrdev_name = CHARACTER_DEVICE_NAME;
+    axidma_dev->minor_num = MINOR_NUMBER;
+    axidma_dev->num_devices = NUM_DEVICES;
+
+    // Initialize the character device for the module.
+    rc = axidma_chrdev_init(axidma_dev);
+    if (rc < 0) {
+        goto destroy_dma_dev;
+    }
+
+    // Set the private data in the device to the AXI DMA device structure
+    dev_set_drvdata(&pdev->dev, axidma_dev);
     return 0;
+
+destroy_dma_dev:
+    axidma_dma_exit(axidma_dev);
+free_axidma_dev:
+    kfree(axidma_dev);
+    return -ENOSYS;
 }
 
 /**
@@ -75,14 +105,21 @@ static int xilinx_dma_bridge_probe(struct platform_device *pdev)
  * This function is invoked when the platform driver unregistered with the kernel. This function simply invokes all of
  * the cleanup functions for the various subsystems in the driver.
  **/
-static int xilinx_dma_bridge_remove(struct platform_device *platform_device)
+static int xilinx_dma_bridge_remove(struct platform_device *pdev)
 {
-    /* TODO:
-     *  1. Get the private device from platform device.
-     *  2. Cleanup the character device.
-     *  3. Cleanup the DMA subsystem.
-     **/
+    struct axidma_device *axidma_dev;
 
+    // Get the AXI DMA device structure from the device's private data
+    axidma_dev = dev_get_drvdata(&pdev->dev);
+
+    // Cleanup the character device structures
+    axidma_chrdev_exit(axidma_dev);
+
+    // Cleanup the DMA structures
+    axidma_dma_exit(axidma_dev);
+
+    // Free the device structure
+    kfree(axidma_dev);
     return 0;
 }
 
