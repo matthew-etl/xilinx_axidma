@@ -274,7 +274,7 @@ static int axidma_mmap(struct file *file, struct vm_area_struct *vma)
     dma_alloc->user_addr = (void *)vma->vm_start;
 
     // Configure the DMA device
-    of_dma_configure(dev->device, NULL);
+    of_dma_configure(dev->device, NULL, false);
 
     // Allocate the requested region a contiguous and uncached for DMA
     vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
@@ -327,15 +327,15 @@ ret:
 static bool axidma_access_ok(const void __user *arg, size_t size, bool readonly)
 {
     // Note that VERIFY_WRITE implies VERIFY_WRITE, so read-write is handled
-    if (!readonly && !access_ok(VERIFY_WRITE, arg, size)) {
-        axidma_err("Argument address %p, size %zu cannot be written to.\n",
-                   arg, size);
-        return false;
-    } else if (!access_ok(VERIFY_READ, arg, size)) {
-        axidma_err("Argument address %p, size %zu cannot be read from.\n",
-                   arg, size);
-        return false;
-    }
+    // if (!readonly && !access_ok(VERIFY_WRITE, arg, size)) {
+    //     axidma_err("Argument address %p, size %zu cannot be written to.\n",
+    //                arg, size);
+    //     return false;
+    // } else if (!access_ok(VERIFY_READ, arg, size)) {
+    //     axidma_err("Argument address %p, size %zu cannot be read from.\n",
+    //                arg, size);
+    //     return false;
+    // }
 
     return true;
 }
